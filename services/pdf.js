@@ -21,6 +21,7 @@ const COLORS = {
 class AppraisalPDFGenerator {
   constructor(data) {
     this.data = data;
+    this.currentPage = 0;
     this.doc = new PDFDocument({
       size: 'A4',
       margins: {
@@ -38,28 +39,24 @@ class AppraisalPDFGenerator {
         ModDate: new Date()
       }
     });
+
+    // Initialize page counter
+    this.doc.on('pageAdded', () => {
+      this.currentPage++;
+      if (this.currentPage > 1) {
+        this.addPageNumber();
+      }
+    });
   }
 
   async generatePDF() {
     try {
-      // Set up document
       this.setupDocument();
-      
-      // Generate cover page
       await this.generateCoverPage();
-      
-      // Generate table of contents
       await this.generateTableOfContents();
-      
-      // Generate content pages
       await this.generateContent();
-      
-      // Add security features
       await this.addSecurityFeatures();
-      
-      // Finalize document
       this.doc.end();
-      
       return this.doc;
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -70,15 +67,6 @@ class AppraisalPDFGenerator {
   setupDocument() {
     // Set default font
     this.doc.font('Helvetica');
-    
-    // Add page numbers
-    let pageNumber = 1;
-    this.doc.on('pageAdded', () => {
-      if (pageNumber > 1) { // Skip cover page
-        this.addPageNumber(pageNumber);
-      }
-      pageNumber++;
-    });
   }
 
   async generateCoverPage() {
@@ -283,12 +271,11 @@ class AppraisalPDFGenerator {
     this.doc.image(qrImage, 500, this.doc.page.height - 100, { width: 72 });
   }
 
-  addPageNumber(pageNumber) {
-    this.doc.switchToPage(pageNumber - 1);
+  addPageNumber() {
     this.doc.fontSize(8)
       .font('Helvetica')
       .text(
-        `Page ${pageNumber}`,
+        `Page ${this.currentPage}`,
         0,
         this.doc.page.height - 50,
         { align: 'center' }
