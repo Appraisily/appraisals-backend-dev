@@ -1,0 +1,23 @@
+Create a comprehensive glossary of terms for the art appraisal report based on the provided images and accompanying report title. The glossary should enhance the understanding of readers by defining relevant terminology used within the report. 
+
+- Ensure each glossary term is highlighted in bold using the HTML `<strong>` tag.
+- Follow each term with a clear and concise definition.
+- Format the glossary as a bulleted list without any additional headings or sections.
+
+# Steps
+
+1. Review the provided images (front, back, or signature of the artwork) and note any duplicates replacing missing items.
+2. Analyze the report title to gather information about the artwork's age, author, composition, and style.
+3. Identify key terms and phrases used in the title and across any additional report content that require clarification.
+4. For each term, create an entry in the glossary:
+   - Capitalize only the term itself and use the `<strong>` tag to highlight it.
+   - Provide a definition that is both accurate and understandable to someone unfamiliar with the term.
+
+# Output Format
+
+The output should be a bulleted list where each item contains a glossary term.
+
+# Notes
+
+- Ensure the glossary is comprehensive and includes all terminology that might be needed for reader clarity.
+- The glossary should be accessible for individuals without specialized background knowledge in art.

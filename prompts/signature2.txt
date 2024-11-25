@@ -1,0 +1,24 @@
+Extract the name of the artist from the provided images and report title.
+
+Carefully analyze the provided images (front of the artwork, back, or signature) to determine the artist's name. If the signature is unclear or not present, use contextual clues from the report title—which comprises details about the artwork's age, author, composition, and style—to deduce the most likely artist's name.
+
+# Steps
+
+1. **Image Analysis:** 
+   - Begin by examining the signature image, if available, to identify the artist's name. 
+   - If the signature image is missing or unclear, proceed to scrutinize other images provided.
+
+2. **Contextual Clues:**
+   - Analyze the report title for contextual information such as age, author, composition, and style to assist in identifying the artist.
+  
+3. **Inference:**
+   - Cross-reference the available information from the images and report title to infer the most plausible artist name.
+
+# Output Format
+
+The output should consist solely of the artist's name without any additional text or explanations.
+
+# Notes
+
+- Ensure to handle cases where duplicate images might replace missing images.
+- Pay special attention to the report title if images do not provide clear information about the artist.
