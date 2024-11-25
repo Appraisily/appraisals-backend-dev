@@ -1,6 +1,6 @@
 # Appraisals Backend Service
 
-Backend service for automating art appraisal reports using Google Vision AI, OpenAI GPT-4 Vision, and Google Docs/Drive.
+Backend service for automating art appraisal reports using Google Vision AI, OpenAI GPT-4 Vision, and PDFKit.
 
 ## Overview
 
@@ -8,7 +8,7 @@ This service automates the process of generating comprehensive art appraisal rep
 1. Analyzing artwork images using Google Vision AI
 2. Finding and storing similar images
 3. Generating expert art descriptions using GPT-4 Vision
-4. Managing PDF report generation
+4. Creating professional PDF reports
 
 ## Project Structure
 
@@ -91,93 +91,58 @@ Request:
 Response:
 {
   "success": boolean,
-  "message": "string",
-  "pdfLink": "string",     // Google Drive link to PDF
-  "docLink": "string"      // Google Drive link to source Doc
+  "message": "string"
 }
 ```
 
-## PDF Generation Steps
+The response will be a downloadable PDF file with the appraisal report.
 
-The `/generate-pdf` endpoint follows these specific steps:
+### GET /activate-example
 
-1. Initialize Google APIs
-   - Sets up authentication and clients for Google Docs and Drive
+Generates an example PDF report using a predefined post (ID: 141667).
 
-2. Validate Environment Variables
-   - Checks for required template ID and folder ID
-   - Validates configuration settings
+```
+Response: Downloadable PDF file
+Filename: example_appraisal.pdf
+Content-Type: application/pdf
+```
 
-3. Retrieve Metadata Fields
-   - Fetches all required metadata fields:
-     ```javascript
-     [
-       'test', 'ad_copy', 'age_text', 'age1', 'condition',
-       'signature1', 'signature2', 'style', 'valuation_method',
-       'conclusion1', 'conclusion2', 'authorship', 'table',
-       'glossary', 'value'
-     ]
-     ```
-   - Formats numeric values (e.g., appraisal value in USD)
+This endpoint is useful for:
+- Testing the PDF generation system
+- Generating sample reports
+- Demonstrating the service capabilities
 
-4. Fetch Post Information
-   - Gets post title and publication date
-   - Retrieves URLs for age, signature, and main images
+## PDF Report Features
 
-5. Get Gallery Images
-   - Fetches all similar images found by Vision AI
+The generated PDF reports include:
 
-6. Clone Template Document
-   - Creates a copy of the template in Google Docs
-   - Generates unique document ID and link
+### Structure
+- Cover page with logo and main artwork image
+- Table of contents
+- Numbered pages (except cover)
+- Professional layout with consistent formatting
 
-7. Move Document to Designated Folder
-   - Transfers the cloned document to the specified Drive folder
+### Content Sections
+1. Artwork Analysis
+2. Age Analysis
+3. Condition Assessment
+4. Signature Analysis
+5. Style Analysis
+6. Valuation Methodology
+7. Conclusion
+8. Glossary
 
-8. Replace Content Placeholders
-   - Updates all metadata placeholders with actual content
-   - Maintains formatting and structure
+### Security Features
+- Watermark on each page
+- QR code for verification (last page)
+- PDF metadata (title, author, etc.)
+- Professional formatting and layout
 
-9. Adjust Title Font Size
-   - Dynamically sizes title based on length:
-     - ≤20 chars: 18pt
-     - ≤40 chars: 16pt
-     - >40 chars: 14pt
-
-10. Insert Table Metadata
-    - Formats and inserts structured data
-    - Maintains table formatting and alignment
-
-11. Add Gallery Images
-    - Creates image grid layout
-    - Prepares placeholders for similar images
-
-12. Replace Gallery Placeholders
-    - Inserts all similar images found by Vision AI
-    - Maintains consistent spacing and layout
-
-13. Insert Specific Images
-    - Places age, signature, and main images
-    - Resizes images while preserving aspect ratio:
-      - Main image: max 400x300 pts
-      - Signature: max 200x150 pts
-      - Age image: max 300x200 pts
-
-14. Export to PDF
-    - Converts Google Doc to PDF format
-    - Maintains all formatting and images
-
-15. Generate Filename
-    - Uses session_ID if provided
-    - Creates unique filename with UUID otherwise
-
-16. Upload PDF
-    - Saves PDF to specified Drive folder
-    - Generates shareable link
-
-17. Update WordPress
-    - Stores PDF and Doc links in ACF fields
-    - Updates post metadata
+### Image Handling
+- Main artwork image on cover
+- Gallery images in grid layout
+- Age analysis images
+- Signature analysis images
 
 ## Requirements
 
@@ -189,11 +154,6 @@ Required secrets in Google Cloud Secret Manager:
 - `wp_app_password`: WordPress application password
 - `OPENAI_API_KEY`: OpenAI API key
 - `GOOGLE_VISION_CREDENTIALS`: Google Vision AI service account credentials
-- `GOOGLE_DOCS_CREDENTIALS`: Google Docs API service account credentials
-
-Additional environment variables:
-- `GOOGLE_DOCS_TEMPLATE_ID`: ID of the template Google Doc
-- `GOOGLE_DRIVE_FOLDER_ID`: ID of the Google Drive folder for PDFs
 
 ### WordPress Configuration
 
@@ -215,10 +175,12 @@ Required ACF fields:
     "date-fns": "^2.29.3",
     "express": "^4.18.2",
     "form-data": "^4.0.0",
-    "googleapis": "^105.0.0",
     "handlebars": "^4.7.7",
     "he": "^1.2.0",
     "node-fetch": "^2.6.7",
+    "pdfkit": "^0.14.0",
+    "pdfkit-table": "^0.1.99",
+    "qrcode": "^1.5.3",
     "uuid": "^9.0.0"
   }
 }
@@ -238,6 +200,10 @@ curl -X POST https://appraisals-backend-856401495068.us-central1.run.app/complet
 curl -X POST https://appraisals-backend-856401495068.us-central1.run.app/generate-pdf \
   -H "Content-Type: application/json" \
   -d '{"postId": "YOUR_POST_ID", "session_ID": "OPTIONAL_SESSION_ID"}'
+
+# Generate example PDF
+curl https://appraisals-backend-856401495068.us-central1.run.app/activate-example \
+  --output example_appraisal.pdf
 ```
 
 ## Development
