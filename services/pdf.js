@@ -1,590 +1,315 @@
-const { google } = require('googleapis');
-const { Readable } = require('stream');
-const { v4: uuidv4 } = require('uuid');
-const config = require('../config');
+const PDFDocument = require('pdfkit');
+const PDFTable = require('pdfkit-table');
+const QRCode = require('qrcode');
+const { format } = require('date-fns');
+const path = require('path');
+const fetch = require('node-fetch');
 
-let docs;
-let drive;
+// PDF Generation Constants
+const COLORS = {
+  primaryBlue: '#007bff',
+  secondaryBlue: '#0056b3',
+  primaryText: '#1a1a1a',
+  secondaryText: '#6B7280',
+  mutedText: '#9CA3AF',
+  primaryBg: '#FFFFFF',
+  secondaryBg: '#F9FAFB',
+  accentBg: '#EBF5FF',
+  primaryBorder: '#E5E7EB',
+  accentBorder: '#007bff'
+};
 
-// Initialize Google APIs
-async function initializeGoogleApis() {
-  try {
-    const credentials = JSON.parse(config.GOOGLE_DOCS_CREDENTIALS);
+const FONTS = {
+  regular: 'Inter-Regular',
+  medium: 'Inter-Medium',
+  semibold: 'Inter-SemiBold',
+  bold: 'Inter-Bold'
+};
 
-    const auth = new google.auth.GoogleAuth({
-      credentials: credentials,
-      scopes: [
-        'https://www.googleapis.com/auth/documents',
-        'https://www.googleapis.com/auth/drive',
-      ],
-    });
-
-    const authClient = await auth.getClient();
-
-    docs = google.docs({ version: 'v1', auth: authClient });
-    drive = google.drive({ version: 'v3', auth: authClient });
-
-    console.log('Google Docs and Drive clients initialized successfully.');
-  } catch (error) {
-    console.error('Error initializing Google APIs:', error);
-    throw error;
-  }
-}
-
-// Clone template document
-async function cloneTemplate(templateId) {
-  try {
-    const sanitizedTemplateId = templateId.trim();
-    console.log(`Cloning template with ID: '${sanitizedTemplateId}'`);
-
-    const copiedFile = await drive.files.copy({
-      fileId: sanitizedTemplateId,
-      requestBody: {
-        name: `Informe_Tasacion_${uuidv4()}`,
+class AppraisalPDFGenerator {
+  constructor(data) {
+    this.data = data;
+    this.doc = new PDFDocument({
+      size: 'A4',
+      margins: {
+        top: 72,
+        bottom: 72,
+        left: 72,
+        right: 72
       },
-      fields: 'id, webViewLink',
-      supportsAllDrives: true,
-    });
-
-    console.log(`Template cloned with ID: ${copiedFile.data.id}`);
-    return { id: copiedFile.data.id, link: copiedFile.data.webViewLink };
-  } catch (error) {
-    console.error('Error cloning Google Docs template:', error);
-    throw error;
-  }
-}
-
-// Move file to folder
-async function moveFileToFolder(fileId, folderId) {
-  try {
-    const file = await drive.files.get({
-      fileId: fileId,
-      fields: 'parents',
-      supportsAllDrives: true,
-    });
-
-    const previousParents = file.data.parents.join(',');
-
-    await drive.files.update({
-      fileId: fileId,
-      addParents: folderId,
-      removeParents: previousParents,
-      supportsAllDrives: true,
-      fields: 'id, parents',
-    });
-
-    console.log(`File ${fileId} moved to folder ${folderId}`);
-  } catch (error) {
-    console.error('Error moving file:', error);
-    throw error;
-  }
-}
-
-// Replace placeholders in document
-async function replacePlaceholdersInDocument(documentId, data) {
-  try {
-    const document = await docs.documents.get({ documentId });
-    const content = document.data.body.content;
-    const requests = [];
-
-    const findAndReplace = (elements) => {
-      for (const element of elements) {
-        if (element.paragraph && element.paragraph.elements) {
-          for (const textElement of element.paragraph.elements) {
-            if (textElement.textRun && textElement.textRun.content) {
-              for (const [key, value] of Object.entries(data)) {
-                const placeholder = `{{${key}}}`;
-                if (textElement.textRun.content.includes(placeholder)) {
-                  requests.push({
-                    replaceAllText: {
-                      containsText: {
-                        text: placeholder,
-                        matchCase: true,
-                      },
-                      replaceText: value !== undefined && value !== null ? String(value) : '',
-                    },
-                  });
-                }
-              }
-            }
-          }
-        } else if (element.table) {
-          for (const row of element.table.tableRows) {
-            for (const cell of row.tableCells) {
-              if (cell.content) {
-                findAndReplace(cell.content);
-              }
-            }
-          }
-        }
+      info: {
+        Title: `Art Appraisal Report - ${data.appraisal_title}`,
+        Author: 'Andrés Gómez',
+        Subject: 'Art Appraisal Report',
+        Keywords: 'art, appraisal, valuation',
+        CreationDate: new Date(),
+        ModDate: new Date()
       }
-    };
-
-    findAndReplace(content);
-
-    if (requests.length > 0) {
-      await docs.documents.batchUpdate({
-        documentId: documentId,
-        requestBody: {
-          requests: requests,
-        },
-      });
-      console.log(`Placeholders replaced in document ID: ${documentId}`);
-    } else {
-      console.log('No placeholders found to replace.');
-    }
-  } catch (error) {
-    console.error('Error replacing placeholders:', error);
-    throw error;
+    });
   }
-}
 
-// Add gallery images
-async function addGalleryImages(documentId, gallery) {
-  try {
-    console.log('Starting gallery image insertion:', gallery.length, 'images');
+  async generatePDF() {
+    try {
+      // Set up document
+      await this.setupDocument();
+      
+      // Generate cover page
+      await this.generateCoverPage();
+      
+      // Generate table of contents
+      await this.generateTableOfContents();
+      
+      // Generate content pages
+      await this.generateContent();
+      
+      // Add security features
+      await this.addSecurityFeatures();
+      
+      // Finalize document
+      this.doc.end();
+      
+      return this.doc;
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      throw error;
+    }
+  }
+
+  async setupDocument() {
+    // Register fonts
+    this.doc.registerFont(FONTS.regular, path.join(__dirname, '../node_modules/@fontsource/inter/files/inter-latin-400-normal.ttf'));
+    this.doc.registerFont(FONTS.medium, path.join(__dirname, '../node_modules/@fontsource/inter/files/inter-latin-500-normal.ttf'));
+    this.doc.registerFont(FONTS.semibold, path.join(__dirname, '../node_modules/@fontsource/inter/files/inter-latin-600-normal.ttf'));
+    this.doc.registerFont(FONTS.bold, path.join(__dirname, '../node_modules/@fontsource/inter/files/inter-latin-700-normal.ttf'));
+
+    // Set default font
+    this.doc.font(FONTS.regular);
     
-    const document = await docs.documents.get({ documentId });
-    const content = document.data.body.content;
-    let galleryIndex = -1;
-
-    // Find gallery placeholder
-    const findGalleryPlaceholder = (elements) => {
-      for (const element of elements) {
-        if (element.paragraph?.elements) {
-          for (const elem of element.paragraph.elements) {
-            if (elem.textRun?.content.includes('{{gallery}}')) {
-              galleryIndex = elem.startIndex;
-              return true;
-            }
-          }
-        } else if (element.table) {
-          for (const row of element.table.tableRows) {
-            for (const cell of row.tableCells) {
-              if (cell.content && findGalleryPlaceholder(cell.content)) {
-                return true;
-              }
-            }
-          }
-        }
+    // Add page numbers
+    let pageNumber = 1;
+    this.doc.on('pageAdded', () => {
+      if (pageNumber > 1) { // Skip cover page
+        this.addPageNumber(pageNumber);
       }
-      return false;
-    };
+      pageNumber++;
+    });
+  }
 
-    findGalleryPlaceholder(content);
+  async generateCoverPage() {
+    // Add logo
+    const logoResponse = await fetch('https://ik.imagekit.io/appraisily/WebPage/logo_new.png?updatedAt=1731919266638');
+    const logoBuffer = await logoResponse.buffer();
+    this.doc.image(logoBuffer, 72, 72, { width: 180 });
 
-    if (galleryIndex === -1) {
-      console.warn('Gallery placeholder not found');
-      return;
+    // Add title
+    this.doc.fontSize(32)
+      .font(FONTS.bold)
+      .text(this.data.appraisal_title, {
+        align: 'center',
+        y: 200
+      });
+
+    // Add subtitle
+    this.doc.fontSize(18)
+      .font(FONTS.regular)
+      .text('Appraisal Report', {
+        align: 'center',
+        y: 250
+      });
+
+    // Add main image if available
+    if (this.data.main_image) {
+      const imageResponse = await fetch(this.data.main_image);
+      const imageBuffer = await imageResponse.buffer();
+      this.doc.image(imageBuffer, {
+        fit: [400, 300],
+        align: 'center',
+        y: 300
+      });
     }
 
-    // Calculate table dimensions
-    const columns = 3;
-    const rows = Math.ceil(gallery.length / columns);
-    console.log(`Creating table with ${rows} rows and ${columns} columns`);
+    this.doc.addPage();
+  }
 
-    // Delete gallery placeholder and insert table
-    const requests = [
-      {
-        deleteContentRange: {
-          range: {
-            startIndex: galleryIndex,
-            endIndex: galleryIndex + '{{gallery}}'.length,
-          },
-        },
-      },
-      {
-        insertTable: {
-          rows,
-          columns,
-          location: { index: galleryIndex },
-        },
-      }
+  async generateTableOfContents() {
+    this.doc.fontSize(24)
+      .font(FONTS.bold)
+      .text('Table of Contents', 72, 72);
+
+    // Add TOC entries
+    const sections = [
+      'Introduction',
+      'Artwork Image Analysis',
+      'Estimation of Artwork Age',
+      'Artwork Condition Assessment',
+      'Artist Profile and Artwork History',
+      'Signature Analysis',
+      'Artwork Analysis',
+      'Valuation Methodology',
+      'Conclusion',
+      'Glossary of Terms'
     ];
 
-    // Add initial table
-    await docs.documents.batchUpdate({
-      documentId,
-      requestBody: { requests }
+    let y = 120;
+    sections.forEach((section, index) => {
+      this.doc.fontSize(12)
+        .font(FONTS.regular)
+        .text(section, 72, y)
+        .text((index + 1).toString(), 500, y);
+      y += 20;
     });
 
-    // Wait for table creation
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    this.doc.addPage();
+  }
 
-    // Get updated document
-    const updatedDoc = await docs.documents.get({ documentId });
+  async generateContent() {
+    // Introduction
+    this.addSection('Introduction', this.data.introduction);
+
+    // Artwork Analysis
+    this.addSection('Artwork Image Analysis', this.data.test);
     
-    // Find inserted table
-    const tableElement = updatedDoc.data.body.content.find(
-      element => element.table && element.startIndex >= galleryIndex
-    );
-
-    if (!tableElement) {
-      throw new Error('Table not found after insertion');
+    // Add gallery images
+    if (this.data.gallery && Array.isArray(this.data.gallery)) {
+      await this.addGalleryImages(this.data.gallery);
     }
 
-    // Insert placeholders in cells
-    const placeholderRequests = [];
-    let imageIndex = 0;
+    // Age Analysis
+    this.addSection('Estimation of Artwork Age', [
+      this.data.age_text,
+      this.data.age1
+    ]);
 
-    for (const row of tableElement.table.tableRows) {
-      for (const cell of row.tableCells) {
-        if (imageIndex < gallery.length) {
-          // Insert text in each cell
-          placeholderRequests.push({
-            insertText: {
-              location: { index: cell.startIndex + 1 },
-              text: `{{googlevision${imageIndex + 1}}}`
-            }
-          });
-          imageIndex++;
-        }
-      }
-    }
+    // Condition Assessment
+    this.addSection('Artwork Condition Assessment', this.data.condition);
 
-    if (placeholderRequests.length > 0) {
-      await docs.documents.batchUpdate({
-        documentId,
-        requestBody: {
-          requests: placeholderRequests
-        }
+    // Signature Analysis
+    this.addSection('Signature Analysis', [
+      this.data.signature1,
+      this.data.signature2
+    ]);
+
+    // Style Analysis
+    this.addSection('Artwork Analysis', this.data.style);
+
+    // Valuation
+    this.addSection('Valuation Methodology', this.data.valuation_method);
+
+    // Conclusion
+    this.addSection('Conclusion', [
+      this.data.conclusion1,
+      this.data.conclusion2
+    ]);
+
+    // Value Display
+    this.addValueDisplay(this.data.appraisal_value);
+
+    // Glossary
+    this.addSection('Glossary of Terms', this.data.glossary);
+  }
+
+  addSection(title, content) {
+    this.doc.addPage();
+    
+    // Add section header
+    this.doc.fontSize(24)
+      .font(FONTS.bold)
+      .fillColor(COLORS.primaryText)
+      .text(title, 72, 72);
+
+    // Add content
+    this.doc.fontSize(11)
+      .font(FONTS.regular)
+      .fillColor(COLORS.primaryText)
+      .text(Array.isArray(content) ? content.join('\n\n') : content, {
+        width: 468,
+        align: 'justify',
+        continued: false
       });
-    }
-
-    console.log(`Added ${placeholderRequests.length} image placeholders`);
-  } catch (error) {
-    console.error('Error adding gallery images:', error);
-    throw error;
   }
-}
 
-// Replace placeholders with images
-async function replacePlaceholdersWithImages(documentId, gallery) {
-  try {
-    for (let i = 0; i < gallery.length; i++) {
-      const placeholder = `googlevision${i + 1}`;
-      const imageUrl = gallery[i];
+  async addGalleryImages(gallery) {
+    const imagesPerRow = 3;
+    const imageWidth = 140;
+    const imageHeight = 140;
+    const margin = 20;
 
-      if (imageUrl) {
-        await insertImageAtPlaceholder(documentId, placeholder, imageUrl);
+    for (let i = 0; i < gallery.length; i += imagesPerRow) {
+      if (i > 0) {
+        this.doc.addPage();
+      }
+
+      const row = gallery.slice(i, i + imagesPerRow);
+      for (let j = 0; j < row.length; j++) {
+        const x = 72 + (j * (imageWidth + margin));
+        const y = this.doc.y + 20;
+
+        const imageResponse = await fetch(row[j]);
+        const imageBuffer = await imageResponse.buffer();
+        this.doc.image(imageBuffer, x, y, {
+          fit: [imageWidth, imageHeight],
+          align: 'center',
+          valign: 'center'
+        });
       }
     }
-  } catch (error) {
-    console.error('Error replacing gallery placeholders:', error);
-    throw error;
   }
-}
 
-// Insert image at placeholder
-async function insertImageAtPlaceholder(documentId, placeholder, imageUrl) {
-  try {
-    if (!imageUrl) {
-      console.warn(`No image URL provided for placeholder {{${placeholder}}}`);
-      return;
-    }
-
-    const document = await docs.documents.get({ documentId });
-    const content = document.data.body.content;
-    const placeholderFull = `{{${placeholder}}}`;
-    const occurrences = [];
-
-    const findPlaceholders = (elements) => {
-      for (const element of elements) {
-        if (element.paragraph?.elements) {
-          for (const elem of element.paragraph.elements) {
-            if (elem.textRun?.content.includes(placeholderFull)) {
-              const startIndex = elem.startIndex + elem.textRun.content.indexOf(placeholderFull);
-              occurrences.push({
-                startIndex,
-                endIndex: startIndex + placeholderFull.length
-              });
-            }
-          }
-        } else if (element.table) {
-          for (const row of element.table.tableRows) {
-            for (const cell of row.tableCells) {
-              if (cell.content) {
-                findPlaceholders(cell.content);
-              }
-            }
-          }
-        }
-      }
+  addValueDisplay(value) {
+    this.doc.addPage();
+    
+    const box = {
+      x: 72,
+      y: this.doc.y + 20,
+      width: 468,
+      height: 100
     };
 
-    findPlaceholders(content);
+    // Draw value box
+    this.doc.save()
+      .rect(box.x, box.y, box.width, box.height)
+      .fill(COLORS.primaryBlue);
 
-    if (occurrences.length === 0) {
-      console.warn(`No occurrences found for placeholder {{${placeholder}}}`);
-      return;
-    }
+    // Add value text
+    this.doc.fontSize(32)
+      .font(FONTS.bold)
+      .fillColor('white')
+      .text('Final Appraisal Value', box.x + 20, box.y + 20)
+      .fontSize(24)
+      .text(value, box.x + 20, box.y + 60);
 
-    const requests = [];
-    for (const occurrence of occurrences) {
-      requests.push(
-        {
-          deleteContentRange: {
-            range: {
-              startIndex: occurrence.startIndex,
-              endIndex: occurrence.endIndex
-            }
-          }
-        },
-        {
-          insertInlineImage: {
-            location: {
-              index: occurrence.startIndex
-            },
-            uri: imageUrl,
-            objectSize: {
-              height: { magnitude: 150, unit: 'PT' },
-              width: { magnitude: 150, unit: 'PT' }
-            }
-          }
-        }
+    this.doc.restore();
+  }
+
+  async addSecurityFeatures() {
+    // Add watermark
+    this.doc.save()
+      .translate(this.doc.page.width / 2, this.doc.page.height / 2)
+      .rotate(45)
+      .fontSize(60)
+      .fillOpacity(0.05)
+      .text('APPRAISILY', -150, 0)
+      .restore();
+
+    // Add QR code
+    const qrData = `https://appraisily.com/verify/${this.data.id}`;
+    const qrImage = await QRCode.toBuffer(qrData);
+    this.doc.image(qrImage, 500, this.doc.page.height - 100, { width: 72 });
+  }
+
+  addPageNumber(pageNumber) {
+    this.doc.switchToPage(pageNumber - 1);
+    this.doc.fontSize(8)
+      .font(FONTS.regular)
+      .text(
+        `Page ${pageNumber}`,
+        0,
+        this.doc.page.height - 50,
+        { align: 'center' }
       );
-    }
-
-    await docs.documents.batchUpdate({
-      documentId,
-      requestBody: { requests }
-    });
-
-    console.log(`Replaced ${occurrences.length} occurrences of {{${placeholder}}} with image`);
-  } catch (error) {
-    console.error(`Error inserting image for placeholder {{${placeholder}}}:`, error);
-  }
-}
-
-// Adjust title font size
-async function adjustTitleFontSize(documentId, titleText) {
-  try {
-    const document = await docs.documents.get({ documentId });
-    const content = document.data.body.content;
-    let titleRange = null;
-
-    const titleRegex = new RegExp(titleText.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-
-    const findTitleInElements = (elements) => {
-      for (const element of elements) {
-        if (element.paragraph && element.paragraph.elements) {
-          for (const elem of element.paragraph.elements) {
-            if (elem.textRun && elem.textRun.content.trim().match(titleRegex)) {
-              titleRange = {
-                startIndex: elem.startIndex,
-                endIndex: elem.endIndex,
-              };
-              return true;
-            }
-          }
-        } else if (element.table) {
-          for (const row of element.table.tableRows) {
-            for (const cell of row.tableCells) {
-              if (findTitleInElements(cell.content)) {
-                return true;
-              }
-            }
-          }
-        }
-      }
-      return false;
-    };
-
-    findTitleInElements(content);
-
-    if (!titleRange) {
-      console.warn('Title not found for font size adjustment.');
-      return;
-    }
-
-    let fontSize;
-    if (titleText.length <= 20) {
-      fontSize = 18;
-    } else if (titleText.length <= 40) {
-      fontSize = 16;
-    } else {
-      fontSize = 14;
-    }
-
-    await docs.documents.batchUpdate({
-      documentId: documentId,
-      requestBody: {
-        requests: [{
-          updateTextStyle: {
-            range: titleRange,
-            textStyle: {
-              fontSize: {
-                magnitude: fontSize,
-                unit: 'PT',
-              },
-            },
-            fields: 'fontSize',
-          },
-        }],
-      },
-    });
-
-    console.log(`Title font size adjusted to ${fontSize}pt`);
-  } catch (error) {
-    console.error('Error adjusting title font size:', error);
-    throw error;
-  }
-}
-
-// Insert formatted metadata
-async function insertFormattedMetadata(documentId, placeholder, tableData) {
-  try {
-    const document = await docs.documents.get({ documentId });
-    const content = document.data.body.content;
-    let placeholderFound = false;
-    let placeholderIndex = -1;
-
-    const findPlaceholder = (elements) => {
-      for (const element of elements) {
-        if (element.paragraph && element.paragraph.elements) {
-          for (const elem of element.paragraph.elements) {
-            if (elem.textRun && elem.textRun.content.includes(`{{${placeholder}}}`)) {
-              placeholderFound = true;
-              placeholderIndex = elem.startIndex;
-              return true;
-            }
-          }
-        } else if (element.table) {
-          for (const row of element.table.tableRows) {
-            for (const cell of row.tableCells) {
-              if (cell.content && findPlaceholder(cell.content)) {
-                return true;
-              }
-            }
-          }
-        }
-      }
-      return false;
-    };
-
-    findPlaceholder(content);
-
-    if (!placeholderFound) {
-      console.warn(`Placeholder "{{${placeholder}}}" not found in document.`);
-      return;
-    }
-
-    const rows = tableData.split('-').map(item => item.trim()).filter(item => item);
-    const formattedText = rows.map(row => {
-      const [key, value] = row.split(':').map(s => s.trim());
-      if (key && value) {
-        return `**${key}:** ${value}`;
-      } else if (key) {
-        return `**${key}:**`;
-      } else {
-        return value;
-      }
-    }).join('\n');
-
-    await docs.documents.batchUpdate({
-      documentId: documentId,
-      requestBody: {
-        requests: [
-          {
-            deleteContentRange: {
-              range: {
-                startIndex: placeholderIndex,
-                endIndex: placeholderIndex + `{{${placeholder}}}`.length,
-              },
-            },
-          },
-          {
-            insertText: {
-              text: formattedText,
-              location: {
-                index: placeholderIndex,
-              },
-            },
-          },
-          ...rows.map((row, idx) => {
-            const [key] = row.split(':').map(s => s.trim());
-            if (key) {
-              const beforeText = rows.slice(0, idx).join('\n').length;
-              const keyStartIndex = placeholderIndex + beforeText + (idx > 0 ? 1 : 0);
-              return {
-                updateTextStyle: {
-                  range: {
-                    startIndex: keyStartIndex,
-                    endIndex: keyStartIndex + key.length + 1,
-                  },
-                  textStyle: {
-                    bold: true,
-                  },
-                  fields: 'bold',
-                },
-              };
-            }
-            return null;
-          }).filter(req => req !== null)
-        ],
-      },
-    });
-  } catch (error) {
-    console.error('Error inserting formatted metadata:', error);
-    throw error;
-  }
-}
-
-// Export to PDF
-async function exportToPDF(documentId) {
-  try {
-    const response = await drive.files.export(
-      {
-        fileId: documentId,
-        mimeType: 'application/pdf',
-      },
-      { responseType: 'arraybuffer' }
-    );
-
-    return Buffer.from(response.data);
-  } catch (error) {
-    console.error('Error exporting to PDF:', error);
-    throw error;
-  }
-}
-
-// Upload PDF to Drive
-async function uploadPDFToDrive(pdfBuffer, filename, folderId) {
-  try {
-    const fileMetadata = {
-      name: filename,
-      parents: [folderId],
-      mimeType: 'application/pdf',
-    };
-
-    const media = {
-      mimeType: 'application/pdf',
-      body: Readable.from(pdfBuffer),
-    };
-
-    const file = await drive.files.create({
-      resource: fileMetadata,
-      media: media,
-      fields: 'id, webViewLink',
-    });
-
-    return file.data.webViewLink;
-  } catch (error) {
-    console.error('Error uploading PDF:', error);
-    throw error;
   }
 }
 
 module.exports = {
-  initializeGoogleApis,
-  cloneTemplate,
-  moveFileToFolder,
-  replacePlaceholdersInDocument,
-  adjustTitleFontSize,
-  insertFormattedMetadata,
-  addGalleryImages,
-  replacePlaceholdersWithImages,
-  insertImageAtPlaceholder,
-  exportToPDF,
-  uploadPDFToDrive
+  AppraisalPDFGenerator
 };

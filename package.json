@@ -19,6 +19,10 @@
     "handlebars": "^4.7.7",
     "he": "^1.2.0",
     "node-fetch": "^2.6.7",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "pdfkit": "^0.14.0",
+    "pdfkit-table": "^0.1.99",
+    "@fontsource/inter": "^5.0.16",
+    "qrcode": "^1.5.3"
   }
 }
