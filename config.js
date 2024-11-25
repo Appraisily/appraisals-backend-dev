@@ -5,6 +5,5 @@ module.exports = {
   WORDPRESS_APP_PASSWORD: null, // Set from Secret Manager
   OPENAI_API_KEY: null,        // Set from Secret Manager
   GOOGLE_VISION_CREDENTIALS: null, // Set from Secret Manager
-  GOOGLE_DOCS_CREDENTIALS: null,   // Set from Secret Manager
   GOOGLE_CLOUD_PROJECT: process.env.GOOGLE_CLOUD_PROJECT || 'civil-forge-403609'
 };

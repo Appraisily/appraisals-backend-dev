@@ -1,5 +1,5 @@
 {
-  "name": "appraisals-backend",
+  "name": "appraisals-backend-dev",
   "version": "1.3.0",
   "description": "Backend service for updating WordPress post metadata using OpenAI and Google Vision",
   "main": "index.js",
@@ -7,7 +7,7 @@
     "start": "node index.js",
     "dev": "node index.js"
   },
-  "author": "Tu Nombre",
+  "author": "Appraisily",
   "license": "MIT",
   "dependencies": {
     "@google-cloud/secret-manager": "^3.0.0",
@@ -17,7 +17,6 @@
     "date-fns": "^2.29.3",
     "express": "^4.18.2",
     "form-data": "^4.0.0",
-    "googleapis": "^105.0.0",
     "handlebars": "^4.7.7",
     "he": "^1.2.0",
     "node-fetch": "^2.6.7",

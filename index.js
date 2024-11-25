@@ -4,7 +4,7 @@ const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
 const config = require('./config');
 const appraisalRouter = require('./routes/appraisal');
 const pdfRouter = require('./routes/pdf');
-const { initializeGoogleApis } = require('./services/pdf');
+const { initializeVisionClient } = require('./services/vision');
 
 const app = express();
 
@@ -34,7 +34,6 @@ async function loadSecrets() {
     config.WORDPRESS_APP_PASSWORD = await getSecret('wp_app_password');
     config.OPENAI_API_KEY = await getSecret('OPENAI_API_KEY');
     config.GOOGLE_VISION_CREDENTIALS = await getSecret('GOOGLE_VISION_CREDENTIALS');
-    config.GOOGLE_DOCS_CREDENTIALS = await getSecret('GOOGLE_DOCS_CREDENTIALS');
     console.log('All secrets loaded successfully.');
   } catch (error) {
     console.error('Error loading secrets:', error);
@@ -45,7 +44,7 @@ async function loadSecrets() {
 // Get secret from Secret Manager
 async function getSecret(secretName) {
   try {
-    const projectId = 'civil-forge-403609';
+    const projectId = config.GOOGLE_CLOUD_PROJECT;
     const secretPath = `projects/${projectId}/secrets/${secretName}/versions/latest`;
     const [version] = await secretClient.accessSecretVersion({ name: secretPath });
     return version.payload.data.toString('utf8');
@@ -59,7 +58,7 @@ async function getSecret(secretName) {
 async function startServer() {
   try {
     await loadSecrets();
-    await initializeGoogleApis();
+    await initializeVisionClient();
 
     const PORT = process.env.PORT || 8080;
     app.listen(PORT, () => {
