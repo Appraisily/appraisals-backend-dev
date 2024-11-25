@@ -2,7 +2,6 @@ const PDFDocument = require('pdfkit');
 const PDFTable = require('pdfkit-table');
 const QRCode = require('qrcode');
 const { format } = require('date-fns');
-const path = require('path');
 const fetch = require('node-fetch');
 
 // PDF Generation Constants
@@ -17,13 +16,6 @@ const COLORS = {
   accentBg: '#EBF5FF',
   primaryBorder: '#E5E7EB',
   accentBorder: '#007bff'
-};
-
-const FONTS = {
-  regular: 'Inter-Regular',
-  medium: 'Inter-Medium',
-  semibold: 'Inter-SemiBold',
-  bold: 'Inter-Bold'
 };
 
 class AppraisalPDFGenerator {
@@ -51,7 +43,7 @@ class AppraisalPDFGenerator {
   async generatePDF() {
     try {
       // Set up document
-      await this.setupDocument();
+      this.setupDocument();
       
       // Generate cover page
       await this.generateCoverPage();
@@ -75,15 +67,9 @@ class AppraisalPDFGenerator {
     }
   }
 
-  async setupDocument() {
-    // Register fonts
-    this.doc.registerFont(FONTS.regular, path.join(__dirname, '../node_modules/@fontsource/inter/files/inter-latin-400-normal.ttf'));
-    this.doc.registerFont(FONTS.medium, path.join(__dirname, '../node_modules/@fontsource/inter/files/inter-latin-500-normal.ttf'));
-    this.doc.registerFont(FONTS.semibold, path.join(__dirname, '../node_modules/@fontsource/inter/files/inter-latin-600-normal.ttf'));
-    this.doc.registerFont(FONTS.bold, path.join(__dirname, '../node_modules/@fontsource/inter/files/inter-latin-700-normal.ttf'));
-
+  setupDocument() {
     // Set default font
-    this.doc.font(FONTS.regular);
+    this.doc.font('Helvetica');
     
     // Add page numbers
     let pageNumber = 1;
@@ -103,7 +89,7 @@ class AppraisalPDFGenerator {
 
     // Add title
     this.doc.fontSize(32)
-      .font(FONTS.bold)
+      .font('Helvetica-Bold')
       .text(this.data.appraisal_title, {
         align: 'center',
         y: 200
@@ -111,7 +97,7 @@ class AppraisalPDFGenerator {
 
     // Add subtitle
     this.doc.fontSize(18)
-      .font(FONTS.regular)
+      .font('Helvetica')
       .text('Appraisal Report', {
         align: 'center',
         y: 250
@@ -133,7 +119,7 @@ class AppraisalPDFGenerator {
 
   async generateTableOfContents() {
     this.doc.fontSize(24)
-      .font(FONTS.bold)
+      .font('Helvetica-Bold')
       .text('Table of Contents', 72, 72);
 
     // Add TOC entries
@@ -153,7 +139,7 @@ class AppraisalPDFGenerator {
     let y = 120;
     sections.forEach((section, index) => {
       this.doc.fontSize(12)
-        .font(FONTS.regular)
+        .font('Helvetica')
         .text(section, 72, y)
         .text((index + 1).toString(), 500, y);
       y += 20;
@@ -213,13 +199,13 @@ class AppraisalPDFGenerator {
     
     // Add section header
     this.doc.fontSize(24)
-      .font(FONTS.bold)
+      .font('Helvetica-Bold')
       .fillColor(COLORS.primaryText)
       .text(title, 72, 72);
 
     // Add content
     this.doc.fontSize(11)
-      .font(FONTS.regular)
+      .font('Helvetica')
       .fillColor(COLORS.primaryText)
       .text(Array.isArray(content) ? content.join('\n\n') : content, {
         width: 468,
@@ -272,7 +258,7 @@ class AppraisalPDFGenerator {
 
     // Add value text
     this.doc.fontSize(32)
-      .font(FONTS.bold)
+      .font('Helvetica-Bold')
       .fillColor('white')
       .text('Final Appraisal Value', box.x + 20, box.y + 20)
       .fontSize(24)
@@ -300,7 +286,7 @@ class AppraisalPDFGenerator {
   addPageNumber(pageNumber) {
     this.doc.switchToPage(pageNumber - 1);
     this.doc.fontSize(8)
-      .font(FONTS.regular)
+      .font('Helvetica')
       .text(
         `Page ${pageNumber}`,
         0,

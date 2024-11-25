@@ -95,4 +95,82 @@ router.post('/generate-pdf', async (req, res) => {
   }
 });
 
+// New endpoint for example PDF generation
+router.get('/activate-example', async (req, res) => {
+  try {
+    const examplePostId = '141667';
+    
+    // Get metadata fields
+    const metadataKeys = [
+      'test', 'ad_copy', 'age_text', 'age1', 'condition',
+      'signature1', 'signature2', 'style', 'valuation_method',
+      'conclusion1', 'conclusion2', 'authorship', 'table',
+      'glossary', 'value'
+    ];
+
+    const metadataPromises = metadataKeys.map(key => getPostMetadata(examplePostId, key));
+    const metadataValues = await Promise.all(metadataPromises);
+
+    const metadata = {};
+    metadataKeys.forEach((key, index) => {
+      metadata[key] = metadataValues[index];
+    });
+
+    // Get title, date, and image URLs
+    const [postTitle, postDate, ageImageUrl, signatureImageUrl, mainImageUrl, gallery] = await Promise.all([
+      getPostTitle(examplePostId),
+      getPostDate(examplePostId),
+      getImageFieldUrlFromPost(examplePostId, 'age'),
+      getImageFieldUrlFromPost(examplePostId, 'signature'),
+      getImageFieldUrlFromPost(examplePostId, 'main'),
+      getPostGallery(examplePostId)
+    ]);
+
+    // Format value if present
+    let appraisalValue = '';
+    if (metadata.value) {
+      const numericValue = parseFloat(metadata.value);
+      if (!isNaN(numericValue)) {
+        appraisalValue = numericValue.toLocaleString('en-US', {
+          style: 'currency',
+          currency: 'USD',
+        });
+      } else {
+        appraisalValue = metadata.value;
+      }
+    }
+
+    // Prepare data for PDF generation
+    const pdfData = {
+      id: uuidv4(),
+      appraisal_title: postTitle,
+      appraisal_date: postDate,
+      appraisal_value: appraisalValue,
+      main_image: mainImageUrl,
+      age_image: ageImageUrl,
+      signature_image: signatureImageUrl,
+      gallery: gallery,
+      ...metadata
+    };
+
+    // Generate PDF
+    const pdfGenerator = new AppraisalPDFGenerator(pdfData);
+    const pdfDoc = await pdfGenerator.generatePDF();
+
+    // Set response headers
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=example_appraisal.pdf`);
+
+    // Stream PDF to response
+    pdfDoc.pipe(res);
+
+  } catch (error) {
+    console.error('Error generating example PDF:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Error generating example PDF'
+    });
+  }
+});
+
 module.exports = router;
