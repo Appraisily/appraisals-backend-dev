@@ -1,27 +1,15 @@
 const PDFDocument = require('pdfkit');
-const PDFTable = require('pdfkit-table');
 const QRCode = require('qrcode');
-const { format } = require('date-fns');
 const fetch = require('node-fetch');
 
-// PDF Generation Constants
 const COLORS = {
   primaryBlue: '#007bff',
-  secondaryBlue: '#0056b3',
-  primaryText: '#1a1a1a',
-  secondaryText: '#6B7280',
-  mutedText: '#9CA3AF',
-  primaryBg: '#FFFFFF',
-  secondaryBg: '#F9FAFB',
-  accentBg: '#EBF5FF',
-  primaryBorder: '#E5E7EB',
-  accentBorder: '#007bff'
+  primaryText: '#1a1a1a'
 };
 
 class AppraisalPDFGenerator {
   constructor(data) {
     this.data = data;
-    this.currentPage = 0;
     this.doc = new PDFDocument({
       size: 'A4',
       margins: {
@@ -31,32 +19,36 @@ class AppraisalPDFGenerator {
         right: 72
       },
       bufferPages: true,
+      autoFirstPage: false,
       info: {
         Title: `Art Appraisal Report - ${data.appraisal_title}`,
         Author: 'Andrés Gómez',
         Subject: 'Art Appraisal Report',
-        Keywords: 'art, appraisal, valuation',
-        CreationDate: new Date(),
-        ModDate: new Date()
+        Keywords: 'art, appraisal, valuation'
       }
     });
-
-    // Initialize page counter
-    this.doc.on('pageAdded', () => {
-      this.currentPage++;
-      if (this.currentPage > 1) {
-        this.addPageNumber();
-      }
-    });
+    
+    this.pageCount = 0;
   }
 
   async generatePDF() {
     try {
-      this.setupDocument();
-      await this.generateCoverPage();
-      await this.generateTableOfContents();
+      // Generate all pages first
       await this.generateContent();
-      await this.addSecurityFeatures();
+      
+      // Number all pages except the first
+      const range = this.doc.bufferedPageRange();
+      for (let i = 1; i < range.count; i++) {
+        this.doc.switchToPage(i);
+        this.addPageNumber(i + 1);
+      }
+
+      // Add security features to all pages
+      for (let i = 0; i < range.count; i++) {
+        this.doc.switchToPage(i);
+        await this.addSecurityFeatures();
+      }
+
       this.doc.end();
       return this.doc;
     } catch (error) {
@@ -65,35 +57,78 @@ class AppraisalPDFGenerator {
     }
   }
 
-  setupDocument() {
-    this.doc.font('Helvetica');
+  async generateContent() {
+    // Cover page
+    this.doc.addPage();
+    await this.generateCoverPage();
+
+    // Table of contents
+    this.doc.addPage();
+    this.generateTableOfContents();
+
+    // Content sections
+    if (this.data.test) {
+      this.addSection('Artwork Analysis', this.data.test);
+    }
+
+    if (this.data.age_text || this.data.age1) {
+      this.addSection('Age Analysis', [this.data.age_text, this.data.age1].filter(Boolean).join('\n\n'));
+    }
+
+    if (this.data.condition) {
+      this.addSection('Condition Assessment', this.data.condition);
+    }
+
+    if (this.data.signature1 || this.data.signature2) {
+      this.addSection('Signature Analysis', [this.data.signature1, this.data.signature2].filter(Boolean).join('\n\n'));
+    }
+
+    if (this.data.style) {
+      this.addSection('Style Analysis', this.data.style);
+    }
+
+    if (this.data.valuation_method) {
+      this.addSection('Valuation Methodology', this.data.valuation_method);
+    }
+
+    if (this.data.conclusion1 || this.data.conclusion2) {
+      this.addSection('Conclusion', [this.data.conclusion1, this.data.conclusion2].filter(Boolean).join('\n\n'));
+    }
+
+    if (this.data.appraisal_value) {
+      this.addValueDisplay();
+    }
+
+    if (this.data.glossary) {
+      this.addSection('Glossary', this.data.glossary);
+    }
   }
 
   async generateCoverPage() {
-    // Add logo
-    const logoResponse = await fetch('https://ik.imagekit.io/appraisily/WebPage/logo_new.png?updatedAt=1731919266638');
-    const logoBuffer = await logoResponse.buffer();
-    this.doc.image(logoBuffer, 72, 72, { width: 180 });
+    try {
+      // Add logo
+      const logoResponse = await fetch('https://ik.imagekit.io/appraisily/WebPage/logo_new.png?updatedAt=1731919266638');
+      const logoBuffer = await logoResponse.buffer();
+      this.doc.image(logoBuffer, 72, 72, { width: 180 });
 
-    // Add title
-    this.doc.fontSize(32)
-      .font('Helvetica-Bold')
-      .text(this.data.appraisal_title || 'Art Appraisal Report', {
-        align: 'center',
-        y: 200
-      });
+      // Add title
+      this.doc
+        .fontSize(32)
+        .text(this.data.appraisal_title || 'Art Appraisal Report', {
+          align: 'center',
+          y: 200
+        });
 
-    // Add subtitle
-    this.doc.fontSize(18)
-      .font('Helvetica')
-      .text('Appraisal Report', {
-        align: 'center',
-        y: 250
-      });
+      // Add subtitle
+      this.doc
+        .fontSize(18)
+        .text('Appraisal Report', {
+          align: 'center',
+          y: 250
+        });
 
-    // Add main image if available
-    if (this.data.main_image) {
-      try {
+      // Add main image if available
+      if (this.data.main_image) {
         const imageResponse = await fetch(this.data.main_image);
         const imageBuffer = await imageResponse.buffer();
         this.doc.image(imageBuffer, {
@@ -101,47 +136,36 @@ class AppraisalPDFGenerator {
           align: 'center',
           y: 300
         });
-      } catch (error) {
-        console.error('Error adding main image:', error);
       }
+    } catch (error) {
+      console.error('Error generating cover page:', error);
     }
-
-    this.doc.addPage();
   }
 
-  async generateTableOfContents() {
-    this.doc.fontSize(24)
-      .font('Helvetica-Bold')
+  generateTableOfContents() {
+    this.doc
+      .fontSize(24)
       .text('Table of Contents', 72, 72);
 
     const sections = [
-      'Introduction',
-      'Artwork Image Analysis',
-      'Estimation of Artwork Age',
-      'Artwork Condition Assessment',
-      'Artist Profile and Artwork History',
-      'Signature Analysis',
       'Artwork Analysis',
+      'Age Analysis',
+      'Condition Assessment',
+      'Signature Analysis',
+      'Style Analysis',
       'Valuation Methodology',
       'Conclusion',
-      'Glossary of Terms'
+      'Glossary'
     ];
 
     let y = 120;
     sections.forEach((section, index) => {
-      if (y > this.doc.page.height - 100) {
-        this.doc.addPage();
-        y = 72;
-      }
-
-      this.doc.fontSize(12)
-        .font('Helvetica')
+      this.doc
+        .fontSize(12)
         .text(section, 72, y)
         .text((index + 1).toString(), 500, y);
       y += 20;
     });
-
-    this.doc.addPage();
   }
 
   addSection(title, content) {
@@ -149,107 +173,20 @@ class AppraisalPDFGenerator {
 
     this.doc.addPage();
     
-    // Add section header
-    this.doc.fontSize(24)
-      .font('Helvetica-Bold')
-      .fillColor(COLORS.primaryText)
+    this.doc
+      .fontSize(24)
       .text(title, 72, 72);
 
-    // Add content with proper text wrapping
-    this.doc.fontSize(11)
-      .font('Helvetica')
-      .fillColor(COLORS.primaryText)
-      .text(Array.isArray(content) ? content.join('\n\n') : content, {
+    this.doc
+      .fontSize(11)
+      .text(content, {
         width: 468,
         align: 'justify',
-        lineBreak: true
+        continued: false
       });
   }
 
-  async generateContent() {
-    // Introduction
-    this.addSection('Introduction', this.data.introduction);
-
-    // Artwork Analysis
-    this.addSection('Artwork Image Analysis', this.data.test);
-    
-    // Add gallery images if available
-    if (this.data.gallery && Array.isArray(this.data.gallery)) {
-      await this.addGalleryImages(this.data.gallery);
-    }
-
-    // Age Analysis
-    this.addSection('Estimation of Artwork Age', [
-      this.data.age_text,
-      this.data.age1
-    ].filter(Boolean));
-
-    // Condition Assessment
-    this.addSection('Artwork Condition Assessment', this.data.condition);
-
-    // Signature Analysis
-    this.addSection('Signature Analysis', [
-      this.data.signature1,
-      this.data.signature2
-    ].filter(Boolean));
-
-    // Style Analysis
-    this.addSection('Artwork Analysis', this.data.style);
-
-    // Valuation
-    this.addSection('Valuation Methodology', this.data.valuation_method);
-
-    // Conclusion
-    this.addSection('Conclusion', [
-      this.data.conclusion1,
-      this.data.conclusion2
-    ].filter(Boolean));
-
-    // Value Display
-    if (this.data.appraisal_value) {
-      this.addValueDisplay(this.data.appraisal_value);
-    }
-
-    // Glossary
-    this.addSection('Glossary of Terms', this.data.glossary);
-  }
-
-  async addGalleryImages(gallery) {
-    if (!Array.isArray(gallery) || gallery.length === 0) return;
-
-    const imagesPerRow = 3;
-    const imageWidth = 140;
-    const imageHeight = 140;
-    const margin = 20;
-
-    for (let i = 0; i < gallery.length; i += imagesPerRow) {
-      if (i > 0) {
-        this.doc.addPage();
-      }
-
-      const row = gallery.slice(i, i + imagesPerRow);
-      for (let j = 0; j < row.length; j++) {
-        try {
-          const x = 72 + (j * (imageWidth + margin));
-          const y = this.doc.y + 20;
-
-          const imageResponse = await fetch(row[j]);
-          const imageBuffer = await imageResponse.buffer();
-          this.doc.image(imageBuffer, x, y, {
-            fit: [imageWidth, imageHeight],
-            align: 'center',
-            valign: 'center'
-          });
-        } catch (error) {
-          console.error('Error adding gallery image:', error);
-        }
-      }
-    }
-  }
-
-  addValueDisplay(value) {
-    if (!value) return;
-
+  addValueDisplay() {
     this.doc.addPage();
     
     const box = {
@@ -259,26 +196,23 @@ class AppraisalPDFGenerator {
       height: 100
     };
 
-    // Draw value box
-    this.doc.save()
+    this.doc
       .rect(box.x, box.y, box.width, box.height)
       .fill(COLORS.primaryBlue);
 
-    // Add value text
-    this.doc.fontSize(32)
-      .font('Helvetica-Bold')
+    this.doc
       .fillColor('white')
+      .fontSize(32)
       .text('Final Appraisal Value', box.x + 20, box.y + 20)
       .fontSize(24)
-      .text(value, box.x + 20, box.y + 60);
-
-    this.doc.restore();
+      .text(this.data.appraisal_value, box.x + 20, box.y + 60);
   }
 
   async addSecurityFeatures() {
     try {
       // Add watermark
-      this.doc.save()
+      this.doc
+        .save()
         .translate(this.doc.page.width / 2, this.doc.page.height / 2)
         .rotate(45)
         .fontSize(60)
@@ -286,8 +220,8 @@ class AppraisalPDFGenerator {
         .text('APPRAISILY', -150, 0)
         .restore();
 
-      // Add QR code
-      if (this.data.id) {
+      // Add QR code on last page only
+      if (this.data.id && this.doc.bufferedPageRange().count - 1 === this.doc._pageNumber) {
         const qrData = `https://appraisily.com/verify/${this.data.id}`;
         const qrImage = await QRCode.toBuffer(qrData);
         this.doc.image(qrImage, 500, this.doc.page.height - 100, { width: 72 });
@@ -297,11 +231,11 @@ class AppraisalPDFGenerator {
     }
   }
 
-  addPageNumber() {
-    this.doc.fontSize(8)
-      .font('Helvetica')
+  addPageNumber(pageNumber) {
+    this.doc
+      .fontSize(8)
       .text(
-        `Page ${this.currentPage}`,
+        `Page ${pageNumber}`,
         0,
         this.doc.page.height - 50,
         { align: 'center' }
