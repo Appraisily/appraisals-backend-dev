@@ -4,7 +4,6 @@ const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
 const config = require('./config');
 const appraisalRouter = require('./routes/appraisal');
 const pdfRouter = require('./routes/pdf');
-const { AppraisalPDFGenerator } = require('./services/pdf');
 const { initializeVisionClient } = require('./services/vision');
 
 const app = express();
@@ -35,7 +34,6 @@ async function loadSecrets() {
     config.WORDPRESS_APP_PASSWORD = await getSecret('wp_app_password');
     config.OPENAI_API_KEY = await getSecret('OPENAI_API_KEY');
     config.GOOGLE_VISION_CREDENTIALS = await getSecret('GOOGLE_VISION_CREDENTIALS');
-    config.GOOGLE_DOCS_CREDENTIALS = await getSecret('GOOGLE_DOCS_CREDENTIALS');
     console.log('All secrets loaded successfully.');
   } catch (error) {
     console.error('Error loading secrets:', error);
