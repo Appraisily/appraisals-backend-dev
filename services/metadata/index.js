@@ -14,19 +14,6 @@ async function processAllMetadata(postId, postTitle, { postData, images }) {
     try {
       console.log(`[Metadata] Processing field: ${field}`);
       
-      // After generating value field, get justification
-      if (field === 'value' && content) {
-        try {
-          justificationData = await getValuationJustification(postTitle, content);
-          // Store both raw data and HTML representation
-          await updateWordPressMetadata(postId, 'valuation_justification', JSON.stringify(justificationData.raw));
-          await updateWordPressMetadata(postId, 'justification_html', justificationData.html);
-          console.log('[Metadata] Valuation justification stored');
-        } catch (error) {
-          console.error('[Metadata] Error getting valuation justification:', error);
-        }
-      }
-      
       // Load prompt template
       const promptTemplate = await getPrompt(field);
       
@@ -41,6 +28,19 @@ async function processAllMetadata(postId, postTitle, { postData, images }) {
       
       // Update WordPress
       await updateWordPressMetadata(postId, field, content);
+      
+      // If this is the value field, get justification
+      if (field === 'value') {
+        try {
+          justificationData = await getValuationJustification(postTitle, content);
+          // Store both raw data and HTML representation
+          await updateWordPressMetadata(postId, 'valuation_justification', JSON.stringify(justificationData.raw));
+          await updateWordPressMetadata(postId, 'justification_html', justificationData.html);
+          console.log('[Metadata] Valuation justification stored');
+        } catch (error) {
+          console.error('[Metadata] Error getting valuation justification:', error);
+        }
+      }
       
       // Store in context for next iterations
       context[field] = content;
