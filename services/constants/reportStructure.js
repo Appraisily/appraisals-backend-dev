@@ -10,6 +10,7 @@ const PROMPT_PROCESSING_ORDER = [
   'signature2',
   'style',
   'valuation_method',
+  'value',
   'conclusion1',
   'conclusion2',
   'ad_copy',

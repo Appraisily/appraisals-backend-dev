@@ -14,17 +14,25 @@ async function processAllMetadata(postId, postTitle, { postData, images }) {
     try {
       console.log(`[Metadata] Processing field: ${field}`);
       
-      // Load prompt template
-      const promptTemplate = await getPrompt(field);
-      
-      // Build contextual prompt
-      const prompt = buildContextualPrompt(promptTemplate, {
-        ...context,
-        justification: justificationData
-      });
-      
-      // Generate content
-      const content = await generateContent(prompt, postTitle, images);
+      let content;
+
+      // Special handling for value field
+      if (field === 'value') {
+        content = postData.acf?.value || '';
+        console.log('[Metadata] Using existing value from ACF:', content);
+      } else {
+        // Load prompt template
+        const promptTemplate = await getPrompt(field);
+        
+        // Build contextual prompt
+        const prompt = buildContextualPrompt(promptTemplate, {
+          ...context,
+          justification: justificationData
+        });
+        
+        // Generate content
+        content = await generateContent(prompt, postTitle, images);
+      }
       
       // Update WordPress
       await updateWordPressMetadata(postId, field, content);

@@ -3,6 +3,45 @@ const router = express.Router();
 const wordpress = require('../services/wordpress');
 const { processMainImageWithGoogleVision } = require('../services/vision');
 const { processAllMetadata } = require('../services/metadata');
+const { getValuationJustification } = require('../services/metadata/justification');
+const { ValidationError } = require('../services/error');
+
+router.post('/debug/justification/:postId', async (req, res) => {
+  const { postId } = req.params;
+
+  if (!postId) {
+    throw new ValidationError('postId is required');
+  }
+
+  try {
+    // Fetch post data
+    const { postData, title } = await wordpress.fetchPostData(postId);
+    
+    if (!title) {
+      throw new ValidationError('Post title not found');
+    }
+
+    // Get value from ACF fields
+    const value = postData.acf?.value;
+    if (!value) {
+      throw new ValidationError('Value field not found in post');
+    }
+
+    // Generate justification
+    const justification = await getValuationJustification(title, value);
+
+    res.json({
+      success: true,
+      postId,
+      title,
+      value,
+      justification
+    });
+  } catch (error) {
+    console.error(`[Debug] Justification error:`, error);
+    throw error;
+  }
+});
 const { getClientIp } = require('request-ip');
 
 router.post('/complete-appraisal-report', async (req, res) => {
