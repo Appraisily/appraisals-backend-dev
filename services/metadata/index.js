@@ -2,12 +2,14 @@ const { generateContent } = require('../openai');
 const { getPrompt, buildContextualPrompt } = require('../utils/promptUtils');
 const { updateWordPressMetadata } = require('../wordpress');
 const { getValuationJustification } = require('./justification');
+const { getValuationJustification } = require('./justification');
 const { PROMPT_PROCESSING_ORDER } = require('../constants/reportStructure');
 
 async function processAllMetadata(postId, postTitle, { postData, images }) {
   console.log(`[Metadata] Processing all fields for post "${postTitle}"`);
   const results = [];
   const context = {};
+  let justificationData = null;
   let justificationData = null;
 
   for (const field of PROMPT_PROCESSING_ORDER) {
@@ -20,6 +22,22 @@ async function processAllMetadata(postId, postTitle, { postData, images }) {
       if (field === 'value') {
         content = postData.acf?.value || '';
         console.log('[Metadata] Using existing value from ACF:', content);
+
+        // Generate justification after value is processed
+        try {
+          justificationData = await getValuationJustification(postTitle, content);
+          // Store both raw data and HTML representation
+          await updateWordPressMetadata(postId, 'valuation_justification', JSON.stringify(justificationData.raw));
+          await updateWordPressMetadata(postId, 'justification_html', justificationData.html);
+          console.log('[Metadata] Valuation justification stored');
+        } catch (error) {
+          console.error('[Metadata] Error getting valuation justification:', error);
+        }
+      } else {
+      // Special handling for value field
+      if (field === 'value') {
+        content = postData.acf?.value || '';
+        console.log('[Metadata] Using existing value from ACF:', content);
       } else {
         // Load prompt template
         const promptTemplate = await getPrompt(field);
@@ -27,11 +45,13 @@ async function processAllMetadata(postId, postTitle, { postData, images }) {
         // Build contextual prompt
         const prompt = buildContextualPrompt(promptTemplate, {
           ...context,
+          ...context,
           justification: justificationData
         });
         
         // Generate content
         content = await generateContent(prompt, postTitle, images);
+      }
       }
       
       // Update WordPress
