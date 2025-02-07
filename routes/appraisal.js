@@ -1,10 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { processAllMetadata } = require('../services/metadata');
+const wordpress = require('../services/wordpress');
 const { processMainImageWithGoogleVision } = require('../services/vision');
-const { getPostTitle, getPostImages } = require('../services/wordpress');
+const { processAllMetadata } = require('../services/metadata');
+const { getClientIp } = require('request-ip');
 
 router.post('/complete-appraisal-report', async (req, res) => {
+  console.log('[Appraisal] Starting report generation');
+
   const { postId } = req.body;
 
   if (!postId) {
@@ -15,31 +18,47 @@ router.post('/complete-appraisal-report', async (req, res) => {
   }
 
   try {
-    console.log(`Processing appraisal report for post: ${postId}`);
-
-    // Get post title and images in parallel
-    const [postTitle, images] = await Promise.all([
-      getPostTitle(postId),
-      getPostImages(postId)
-    ]);
+    const { postData, images, title: postTitle } = await wordpress.fetchPostData(postId);
 
     if (!postTitle) {
-      throw new Error('Post title not found');
+      console.warn('[Appraisal] Post title not found');
+      return res.status(404).json({
+        success: false,
+        message: 'Post not found or title is missing',
+        details: {
+          postId,
+          title: null,
+          visionAnalysis: null,
+          processedFields: []
+        }
+      });
     }
 
-    console.log('Post title:', postTitle);
-    console.log('Available images:', Object.keys(images).filter(key => images[key]));
+    console.log(`[Appraisal] Processing: "${postTitle}"`);
 
-    // Process Google Vision analysis
-    const visionResult = await processMainImageWithGoogleVision(postId);
-    console.log('Vision analysis result:', visionResult);
+    let visionResult;
+    try {
+      visionResult = await processMainImageWithGoogleVision(postId);
+    } catch (error) {
+      console.error(`[Appraisal] Vision error: ${error.message}`);
+      visionResult = {
+        success: false,
+        message: error.message,
+        similarImagesCount: 0
+      };
+    }
 
-    // Process metadata fields
-    const metadataResults = await processAllMetadata(postId, postTitle, images);
-    console.log('Metadata processing results:', metadataResults);
+    let metadataResults;
+    try {
+      metadataResults = await processAllMetadata(postId, postTitle, { postData, images });
+    } catch (error) {
+      console.error(`[Appraisal] Metadata error: ${error.message}`);
+      metadataResults = [];
+    }
 
-    // Return response
-    res.json({
+    console.log('[Appraisal] Report generation complete');
+
+    res.status(200).json({
       success: true,
       message: 'Appraisal report completed successfully.',
       details: {
@@ -50,11 +69,16 @@ router.post('/complete-appraisal-report', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error in /complete-appraisal-report:', error);
-    res.status(500).json({ 
-      success: false, 
+    console.error(`[Appraisal] Error: ${error.message}`);
+    res.status(500).json({
+      success: false,
       message: error.message || 'Error completing appraisal report.',
-      error: error.stack
+      details: {
+        postId,
+        error: error.message,
+        visionAnalysis: null,
+        processedFields: []
+      }
     });
   }
 });

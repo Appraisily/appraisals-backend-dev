@@ -1,15 +1,21 @@
 const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
-const { AppraisalPDFGenerator } = require('../services/pdf');
+const he = require('he');
+const wordpress = require('../services/wordpress');
+const { processMetadata } = require('../services/pdf/metadata/processing');
 const { 
-  getPostMetadata, 
-  getPostTitle, 
-  getPostDate, 
-  getImageFieldUrlFromPost, 
-  getPostGallery, 
-  updatePostACFFields 
-} = require('../services/wordpress');
+  getTemplateId,
+  initializeGoogleApis,
+  cloneTemplate,
+  moveFileToFolder,
+  insertImageAtPlaceholder,
+  replacePlaceholdersInDocument,
+  adjustTitleFontSize,
+  addGalleryImages,
+  exportToPDF,
+  uploadPDFToDrive
+} = require('../services/pdf');
 
 router.post('/generate-pdf', async (req, res) => {
   const { postId, session_ID } = req.body;
@@ -22,153 +28,108 @@ router.post('/generate-pdf', async (req, res) => {
   }
 
   try {
-    // Get metadata fields
-    const metadataKeys = [
-      'test', 'ad_copy', 'age_text', 'age1', 'condition',
-      'signature1', 'signature2', 'style', 'valuation_method',
-      'conclusion1', 'conclusion2', 'authorship', 'table',
-      'glossary', 'value'
-    ];
+    // Step 1: Initialize Google APIs
+    await initializeGoogleApis();
 
-    const metadataPromises = metadataKeys.map(key => getPostMetadata(postId, key));
-    const metadataValues = await Promise.all(metadataPromises);
-
-    const metadata = {};
-    metadataKeys.forEach((key, index) => {
-      metadata[key] = metadataValues[index];
-    });
-
-    // Get title, date, and image URLs
-    const [postTitle, postDate, ageImageUrl, signatureImageUrl, mainImageUrl, gallery] = await Promise.all([
-      getPostTitle(postId),
-      getPostDate(postId),
-      getImageFieldUrlFromPost(postId, 'age'),
-      getImageFieldUrlFromPost(postId, 'signature'),
-      getImageFieldUrlFromPost(postId, 'main'),
-      getPostGallery(postId)
-    ]);
-
-    // Format value if present
-    let appraisalValue = '';
-    if (metadata.value) {
-      const numericValue = parseFloat(metadata.value);
-      if (!isNaN(numericValue)) {
-        appraisalValue = numericValue.toLocaleString('en-US', {
-          style: 'currency',
-          currency: 'USD',
-        });
-      } else {
-        appraisalValue = metadata.value;
-      }
+    const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+    if (!folderId) {
+      throw new Error('GOOGLE_DRIVE_FOLDER_ID must be set in environment variables.');
     }
 
-    // Prepare data for PDF generation
-    const pdfData = {
-      id: session_ID || uuidv4(),
-      appraisal_title: postTitle,
+    // Fetch all data in a single request
+    const { postData, images, title: postTitle, date: postDate } = await wordpress.fetchPostData(postId);
+
+    // Process and validate metadata
+    const { metadata, validation } = await processMetadata(postData);
+    if (!validation.isValid) {
+      return res.status(400).json({
+        success: false,
+        message: `Missing required metadata fields: ${validation.missingFields.join(', ')}`,
+        validation
+      });
+    }
+
+    // Get template ID based on appraisal type
+    const templateId = await getTemplateId();
+    console.log('Using template ID:', templateId);
+
+    // Decode HTML entities in title
+    const decodedTitle = he.decode(postTitle);
+
+    // Log all retrieved data
+    console.log('Metadata:', metadata);
+    console.log('Post title:', decodedTitle);
+    console.log('Post date:', postDate);
+    console.log('Images:', images);
+
+    // Step 6: Clone template
+    const clonedDoc = await cloneTemplate(templateId);
+    const clonedDocId = clonedDoc.id;
+    const clonedDocLink = clonedDoc.link;
+
+    // Step 7: Move to folder
+    await moveFileToFolder(clonedDocId, folderId);
+
+    // Step 8: Replace placeholders
+    const data = {
+      ...metadata,
+      appraisal_title: decodedTitle,
       appraisal_date: postDate,
-      appraisal_value: appraisalValue,
-      main_image: mainImageUrl,
-      age_image: ageImageUrl,
-      signature_image: signatureImageUrl,
-      gallery: gallery,
-      ...metadata
     };
+    await replacePlaceholdersInDocument(clonedDocId, data);
 
-    // Generate PDF
-    const pdfGenerator = new AppraisalPDFGenerator(pdfData);
-    const pdfDoc = await pdfGenerator.generatePDF();
+    // Step 9: Adjust title font size
+    await adjustTitleFontSize(clonedDocId, postTitle);
 
-    // Set response headers
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=appraisal_${postId}.pdf`);
+    // Step 10: Add gallery images
+    try {
+      await addGalleryImages(clonedDocId, images.gallery);
+    } catch (error) {
+      console.error('Error adding gallery images:', error);
+      console.log('Continuing with PDF generation despite gallery error');
+    }
 
-    // Stream PDF to response
-    pdfDoc.pipe(res);
+    // Step 11: Insert specific images
+    if (images.age) {
+      await insertImageAtPlaceholder(clonedDocId, 'age_image', images.age);
+    }
+    if (images.signature) {
+      await insertImageAtPlaceholder(clonedDocId, 'signature_image', images.signature);
+    }
+    if (images.main) {
+      await insertImageAtPlaceholder(clonedDocId, 'main_image', images.main);
+    }
+
+    // Step 12: Export to PDF
+    const pdfBuffer = await exportToPDF(clonedDocId);
+
+    // Step 13: Generate filename
+    const pdfFilename = session_ID?.trim()
+      ? `${session_ID}.pdf`
+      : `Appraisal_Report_Post_${postId}_${uuidv4()}.pdf`;
+
+    // Step 14: Upload PDF
+    const pdfLink = await uploadPDFToDrive(pdfBuffer, pdfFilename, folderId);
+
+    // Step 15: Update WordPress
+    await wordpress.updatePostACFFields(postId, pdfLink, clonedDocLink);
+
+    // Return response
+    console.log('PDF Link:', pdfLink);
+    console.log('Doc Link:', clonedDocLink);
+
+    res.json({
+      success: true,
+      message: 'PDF generated successfully.',
+      pdfLink,
+      docLink: clonedDocLink
+    });
 
   } catch (error) {
     console.error('Error generating PDF:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Error generating PDF'
-    });
-  }
-});
-
-// New endpoint for example PDF generation
-router.get('/activate-example', async (req, res) => {
-  try {
-    const examplePostId = '141667';
-    
-    // Get metadata fields
-    const metadataKeys = [
-      'test', 'ad_copy', 'age_text', 'age1', 'condition',
-      'signature1', 'signature2', 'style', 'valuation_method',
-      'conclusion1', 'conclusion2', 'authorship', 'table',
-      'glossary', 'value'
-    ];
-
-    const metadataPromises = metadataKeys.map(key => getPostMetadata(examplePostId, key));
-    const metadataValues = await Promise.all(metadataPromises);
-
-    const metadata = {};
-    metadataKeys.forEach((key, index) => {
-      metadata[key] = metadataValues[index];
-    });
-
-    // Get title, date, and image URLs
-    const [postTitle, postDate, ageImageUrl, signatureImageUrl, mainImageUrl, gallery] = await Promise.all([
-      getPostTitle(examplePostId),
-      getPostDate(examplePostId),
-      getImageFieldUrlFromPost(examplePostId, 'age'),
-      getImageFieldUrlFromPost(examplePostId, 'signature'),
-      getImageFieldUrlFromPost(examplePostId, 'main'),
-      getPostGallery(examplePostId)
-    ]);
-
-    // Format value if present
-    let appraisalValue = '';
-    if (metadata.value) {
-      const numericValue = parseFloat(metadata.value);
-      if (!isNaN(numericValue)) {
-        appraisalValue = numericValue.toLocaleString('en-US', {
-          style: 'currency',
-          currency: 'USD',
-        });
-      } else {
-        appraisalValue = metadata.value;
-      }
-    }
-
-    // Prepare data for PDF generation
-    const pdfData = {
-      id: uuidv4(),
-      appraisal_title: postTitle,
-      appraisal_date: postDate,
-      appraisal_value: appraisalValue,
-      main_image: mainImageUrl,
-      age_image: ageImageUrl,
-      signature_image: signatureImageUrl,
-      gallery: gallery,
-      ...metadata
-    };
-
-    // Generate PDF
-    const pdfGenerator = new AppraisalPDFGenerator(pdfData);
-    const pdfDoc = await pdfGenerator.generatePDF();
-
-    // Set response headers
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=example_appraisal.pdf`);
-
-    // Stream PDF to response
-    pdfDoc.pipe(res);
-
-  } catch (error) {
-    console.error('Error generating example PDF:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Error generating example PDF'
     });
   }
 });

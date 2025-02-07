@@ -1,40 +1,54 @@
 const fetch = require('node-fetch');
 const config = require('../config');
 
+async function buildMessageContent(prompt, imageUrl, type) {
+  const content = [];
+  
+  // Add text content first
+  content.push({
+    type: "text",
+    text: prompt
+  });
+
+  // Add image if available
+  if (imageUrl) {
+    content.push({
+      type: "image_url",
+      image_url: {
+        url: imageUrl
+      }
+    });
+  }
+
+  return content;
+}
+
 async function generateContent(prompt, postTitle, images = {}) {
   try {
     console.log('Generating content with OpenAI...');
-    console.log('Title:', postTitle);
-    console.log('Available images:', Object.keys(images).filter(key => images[key]));
+    
+    const messages = [{
+      role: "system",
+      content: [{
+        type: "text",
+        text: "You are a professional art expert specializing in appraisals and artwork analysis."
+      }]
+    }];
 
-    const messages = [
-      {
-        role: "system",
-        content: "You are a professional art expert specializing in appraisals and artwork analysis."
-      },
-      {
-        role: "user",
-        content: [
-          { type: "text", text: `Title: ${postTitle}\n\n${prompt}` }
-        ]
-      }
-    ];
+    // Add title and prompt as first user message
+    messages.push({
+      role: "user",
+      content: await buildMessageContent(`Title: ${postTitle}\n\n${prompt}`)
+    });
 
-    // Add available images to the message
-    const validImages = ['main', 'age', 'signature'].filter(type => 
-      images[type] && typeof images[type] === 'string' && images[type].startsWith('http')
-    );
-
-    if (validImages.length > 0) {
-      validImages.forEach(type => {
-        messages[1].content.push({
-          type: "image_url",
-          image_url: { url: images[type] }
+    // Add each image as a separate message with proper structure
+    for (const type of ['main', 'age', 'signature']) {
+      if (images[type] && typeof images[type] === 'string' && images[type].startsWith('http')) {
+        messages.push({
+          role: "user",
+          content: await buildMessageContent(`Analyzing ${type} image:`, images[type])
         });
-      });
-      console.log(`Added ${validImages.length} images to OpenAI request`);
-    } else {
-      console.log('No valid images available for content generation');
+      }
     }
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -44,9 +58,9 @@ async function generateContent(prompt, postTitle, images = {}) {
         'Authorization': `Bearer ${config.OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        model: 'gpt-4-vision-preview',
+        model: 'gpt-4o',
         messages: messages,
-        max_tokens: 1000,
+        max_tokens: 1500,
         temperature: 0.7
       })
     });
