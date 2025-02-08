@@ -42,7 +42,7 @@ async function generatePDF(metadata, images) {
   }
 }
 
-async function uploadPDFToDrive(pdfBuffer, filename, folderId) {
+async function uploadToDrive(pdfBuffer, filename, folderId) {
   try {
     const fileMetadata = {
       name: filename,
@@ -71,5 +71,5 @@ async function uploadPDFToDrive(pdfBuffer, filename, folderId) {
 module.exports = {
   initializeGoogleApis,
   generatePDF,
-  uploadPDFToDrive
+  uploadPDFToDrive: uploadToDrive
 };
