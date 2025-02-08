@@ -1,22 +1,22 @@
 # Dockerfile
 
-# Usa una imagen oficial de Node.js
-FROM node:18
+# Usar una imagen base de Node.js oficial
+FROM node:18-slim
 
-# Crear y cambiar al directorio de la app
+# Crear directorio de la aplicación
 WORKDIR /usr/src/app
 
-# Copiar los archivos de dependencia
+# Copiar package.json y package-lock.json
 COPY package*.json ./
 
 # Instalar dependencias
-RUN npm install --only=production
+RUN npm ci --only=production
 
-# Copiar el resto de los archivos de la app
+# Copiar el código fuente
 COPY . .
 
-# Exponer el puerto
+# Exponer el puerto que usará la aplicación
 EXPOSE 8080
 
-# Comando para correr la app
-CMD [ "npm", "start" ]
+# Comando para iniciar la aplicación
+CMD [ "node", "server.js" ]
