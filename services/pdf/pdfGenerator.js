@@ -205,11 +205,22 @@ class PDFGenerator {
     
     // Análisis de imagen
     this.addSection('Artwork Image Analysis', '');
-    this.addSubsection('Introduction to Image Analysis', 
-      'For this appraisal, we have employed Google Vision to conduct a comparative image analysis. The process began with submitting the artwork's primary frontal image—the most detailed and comprehensive view—to Google Vision's database. This initial image serves as the foundation for the subsequent analysis.\n\n' +
-      'The objective of this image analysis is twofold. First, we aim to identify artworks that bear a visual resemblance to the piece under appraisal. By pinpointing similar works, we can gain valuable insights into the style, period, and potential influences present in the artwork being evaluated.\n\n' +
-      'Second, this process assists in assessing the artwork's uniqueness and its positioning within the art market. Similarities to recognized pieces can indicate the artwork's alignment with specific artistic movements or periods, while distinctive features may highlight its individuality and potential rarity.'
-    );
+    
+    const introText = [
+      "For this appraisal, we have employed Google Vision to conduct a comparative image analysis.",
+      "The process began with submitting the artwork's primary frontal image—the most detailed and comprehensive view—to Google Vision's database.",
+      "This initial image serves as the foundation for the subsequent analysis.",
+      "",
+      "The objective of this image analysis is twofold.",
+      "First, we aim to identify artworks that bear a visual resemblance to the piece under appraisal.",
+      "By pinpointing similar works, we can gain valuable insights into the style, period, and potential influences present in the artwork being evaluated.",
+      "",
+      "Second, this process assists in assessing the artwork's uniqueness and its positioning within the art market.",
+      "Similarities to recognized pieces can indicate the artwork's alignment with specific artistic movements or periods,",
+      "while distinctive features may highlight its individuality and potential rarity."
+    ].join("\n");
+    
+    this.addSubsection('Introduction to Image Analysis', introText);
     
     // Galería de imágenes similares
     this.addSubsection('Visual Comparisons: Similar Artworks Identified by Google Vision', '');
@@ -235,11 +246,20 @@ class PDFGenerator {
     this.addSection('Artist Profile and Artwork History', '');
     
     // Análisis de firma
-    this.addSection('Signature Analysis', 
-      'This section presents a comprehensive profile of the artist, including a biographical overview that highlights key milestones and stylistic evolutions throughout their career. Following this, we examine the artwork's provenance, tracing its ownership history to verify its authenticity and enhance its estimated value. The exhibition history further enriches the narrative by documenting the piece's critical reception and its standing within the art community. By integrating biographical details, provenance, and exhibition records, we obtain a nuanced understanding of the artwork's position within the artist's oeuvre and its significance in the art market.\n\n' +
-      'Additionally, this analysis includes a detailed examination of the artist's signature, as captured in the enclosed image, which is interpreted as follows:\n\n' +
-      'In this phase, I analyze the signature to identify the artist. This process involves cross-referencing the signature with a meticulously curated database of notable artists, encompassing their names, backgrounds, and key biographical information. This database is an essential tool for accurately establishing the artist's identity with precision and reliability.'
-    );
+    const signatureText = [
+      "This section presents a comprehensive profile of the artist, including a biographical overview that highlights key milestones and stylistic evolutions throughout their career.",
+      "Following this, we examine the artwork's provenance, tracing its ownership history to verify its authenticity and enhance its estimated value.",
+      "The exhibition history further enriches the narrative by documenting the piece's critical reception and its standing within the art community.",
+      "By integrating biographical details, provenance, and exhibition records, we obtain a nuanced understanding of the artwork's position within the artist's oeuvre and its significance in the art market.",
+      "",
+      "Additionally, this analysis includes a detailed examination of the artist's signature, as captured in the enclosed image, which is interpreted as follows:",
+      "",
+      "In this phase, I analyze the signature to identify the artist.",
+      "This process involves cross-referencing the signature with a meticulously curated database of notable artists, encompassing their names, backgrounds, and key biographical information.",
+      "This database is an essential tool for accurately establishing the artist's identity with precision and reliability."
+    ].join("\n");
+
+    this.addSection('Signature Analysis', signatureText);
     
     this.addText(metadata.signature2);
     
@@ -304,23 +324,26 @@ class PDFGenerator {
     }
 
     // Información del tasador en texto
-    this.addText('Andrés Gómez', { 
+    this.addText(`BSc, MSc, Accredited Art Appraiser
+Over a Decade of Expertise in Online Art Appraisals
+Served Over 100,000 Clients
+Proprietor of Renowned Antique Establishment`, {
       align: 'center',
       color: this.colors.primary,
       fontSize: 16
     });
     
-    this.addText('BSc, MSc, Accredited Art Appraiser\n' +
-      'Over a Decade of Expertise in Online Art Appraisals\n' +
-      'Served Over 100,000 Clients\n' +
-      'Proprietor of Renowned Antique Establishment', {
+    this.addText(`BSc, MSc, Accredited Art Appraiser
+Over a Decade of Expertise in Online Art Appraisals
+Served Over 100,000 Clients
+Proprietor of Renowned Antique Establishment`, {
       align: 'center',
       color: this.colors.secondary,
       fontSize: 12
     });
     
-    this.addText('Explore my extensive portfolio of past appraisals here:\n' +
-      'https://www.appraisily.com/andres-portofolio/', {
+    this.addText(`Explore my extensive portfolio of past appraisals here:
+https://www.appraisily.com/andres-portofolio/`, {
       align: 'center',
       color: this.colors.accent,
       fontSize: 12
@@ -345,42 +368,74 @@ class PDFGenerator {
     }
     
     // Proceso de tasación
-    this.addSection('Appraisal Process and Appraiser Qualification Summary',
-      'The mark-to-market art appraisal is a fundamental methodology for determining an artwork's current market value. This approach necessitates a comprehensive evaluation of various factors, including prevailing market trends, the artwork's condition and age, and the artist's standing within the art community. By synthesizing these elements, a mark-to-market appraisal delivers an accurate and up-to-date estimate of the artwork's value.\n\n' +
-      'A pivotal aspect of this process is assessing the artist's reputation, which is evaluated through their exhibition history, accolades, and other significant achievements. This information is instrumental in forecasting the artwork's potential value trajectory. Furthermore, a meticulous assessment of the artwork's condition is crucial, as any signs of wear or damage can significantly influence its resale value.\n\n' +
-      'Mark-to-market appraisals involve analyzing current art market dynamics and recent sales of comparable artworks, thereby providing a contemporary and relevant valuation. This comprehensive approach ensures equitable pricing in art transactions by accurately reflecting the current market landscape.\n\n' +
-      'For insurance replacement appraisals, the mark-to-market method precisely estimates replacement costs for lost or damaged artworks, thereby guiding insurance reimbursements. This ensures fair compensation for policyholders while preventing overpayment in insurance claims.\n\n' +
-      'The appraisal process encompasses an exhaustive analysis of the artwork's condition, rarity, demand, and market prices. Providing detailed photographs and descriptions assists the appraiser in identifying any factors that could affect the valuation. This thorough information facilitates a swift, efficient, and precise appraisal process, ensuring that the valuation is both accurate and reliable.'
-    );
+    const appraisalProcessText = [
+      "The mark-to-market art appraisal is a fundamental methodology for determining an artwork's current market value.",
+      "This approach necessitates a comprehensive evaluation of various factors, including prevailing market trends, the artwork's condition and age, and the artist's standing within the art community.",
+      "By synthesizing these elements, a mark-to-market appraisal delivers an accurate and up-to-date estimate of the artwork's value.",
+      "",
+      "A pivotal aspect of this process is assessing the artist's reputation, which is evaluated through their exhibition history, accolades, and other significant achievements.",
+      "This information is instrumental in forecasting the artwork's potential value trajectory.",
+      "Furthermore, a meticulous assessment of the artwork's condition is crucial, as any signs of wear or damage can significantly influence its resale value.",
+      "",
+      "Mark-to-market appraisals involve analyzing current art market dynamics and recent sales of comparable artworks, thereby providing a contemporary and relevant valuation.",
+      "This comprehensive approach ensures equitable pricing in art transactions by accurately reflecting the current market landscape.",
+      "",
+      "For insurance replacement appraisals, the mark-to-market method precisely estimates replacement costs for lost or damaged artworks, thereby guiding insurance reimbursements.",
+      "This ensures fair compensation for policyholders while preventing overpayment in insurance claims.",
+      "",
+      "The appraisal process encompasses an exhaustive analysis of the artwork's condition, rarity, demand, and market prices.",
+      "Providing detailed photographs and descriptions assists the appraiser in identifying any factors that could affect the valuation.",
+      "This thorough information facilitates a swift, efficient, and precise appraisal process, ensuring that the valuation is both accurate and reliable."
+    ].join("\n");
+
+    this.addSection('Appraisal Process and Appraiser Qualification Summary', appraisalProcessText);
     
     // Declaración de responsabilidad
-    this.addSection('A statement of the appraiser's liability and any potential conflicts of interest.',
-      'Our art appraisals are conducted by seasoned professionals with specialized knowledge and extensive experience in art valuation. Our team meets stringent educational and professional standards, ensuring expertise in art research, evaluation, and current market trends. We aim to provide objective value estimates for art pieces, serving purposes such as insurance, tax assessments, estate planning, and sales.\n\n' +
-      'We are committed to fairness and impartiality in all our appraisals. To maintain our objectivity, we charge a flat fee rather than a percentage of the artwork's value, thereby avoiding any potential conflicts of interest. Our appraisal reports adhere to the Uniform Standards of Professional Appraisal Practice (USPAP) established by the Appraisal Foundation, ensuring that our appraisals are ethical, of the highest quality, and legally defensible.'
-    );
+    const liabilityText = [
+      "Our art appraisals are conducted by seasoned professionals with specialized knowledge and extensive experience in art valuation.",
+      "Our team meets stringent educational and professional standards, ensuring expertise in art research, evaluation, and current market trends.",
+      "We aim to provide objective value estimates for art pieces, serving purposes such as insurance, tax assessments, estate planning, and sales.",
+      "",
+      "We are committed to fairness and impartiality in all our appraisals.",
+      "To maintain our objectivity, we charge a flat fee rather than a percentage of the artwork's value, thereby avoiding any potential conflicts of interest.",
+      "Our appraisal reports adhere to the Uniform Standards of Professional Appraisal Practice (USPAP) established by the Appraisal Foundation,",
+      "ensuring that our appraisals are ethical, of the highest quality, and legally defensible."
+    ].join("\n");
+
+    this.addSection('A statement of the appraiser's liability and any potential conflicts of interest.', liabilityText);
     
     // Cómo vender
-    this.addSection('How to sell this artwork.',
-      'To assist you in selling your artwork, we provide a comprehensive guide available here. This guide offers structured steps and best practices for successfully navigating the art market.\n\n' +
-      'This customized ad copy is designed to highlight the unique features and value of your artwork, aiming to attract potential buyers and facilitate a successful sale.\n\n' +
+    const sellingText = [
+      "To assist you in selling your artwork, we provide a comprehensive guide available here.",
+      "This guide offers structured steps and best practices for successfully navigating the art market.",
+      "",
+      "This customized ad copy is designed to highlight the unique features and value of your artwork,",
+      "aiming to attract potential buyers and facilitate a successful sale.",
+      "",
       metadata.ad_copy
-    );
+    ].join("\n");
+
+    this.addSection('How to sell this artwork.', sellingText);
     
     // Glosario
     this.addSection('Glossary of Terms', metadata.glossary);
     
     // Información de contacto
-    this.addSection('Contacts',
-      'Address\n' +
-      'W1 13DD, 80 Kensington Square, office 402\n\n' +
-      'Mobile\n' +
-      '+44 6589 456 77\n' +
-      '+44 5697 855 79\n\n' +
-      'Media\n' +
-      'email@company.com\n' +
-      'www.company.com\n' +
-      '@companytwitter'
-    );
+    const contactText = [
+      "Address",
+      "W1 13DD, 80 Kensington Square, office 402",
+      "",
+      "Mobile",
+      "+44 6589 456 77",
+      "+44 5697 855 79",
+      "",
+      "Media",
+      "email@company.com",
+      "www.company.com",
+      "@companytwitter"
+    ].join("\n");
+
+    this.addSection('Contacts', contactText);
   }
 
   addTitle(title) {
